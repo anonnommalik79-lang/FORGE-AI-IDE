@@ -1,0 +1,36 @@
+{
+  "brand.name": "FORGE",
+  "brand.positioning": "AI Coding Platform",
+
+  "welcome.tagline": "Build beyond code.",
+  "welcome.subtitle": "Your AI-native development environment. Plan, build, run, debug and ship with an autonomous coding agent.",
+  "welcome.cta.primary": "Start building",
+  "welcome.cta.secondary": "Open project",
+  "welcome.cta.newFile": "New file",
+  "welcome.cta.clone": "Clone repository",
+  "welcome.engine": "Engine",
+  "welcome.section.start": "Start",
+  "welcome.section.recent": "Recent",
+  "welcome.section.walkthroughs": "Walkthroughs",
+
+  "agent.title": "FORGE Agent",
+  "agent.placeholder": "Ask FORGE to build, fix, explain, or ship...",
+  "agent.placeholder.edit": "Ask FORGE...  @ for context, / for commands",
+
+  "lang.label": "Language",
+  "lang.en": "English",
+  "lang.ru": "Русский",
+  "lang.switched": "Interface language: English",
+
+  "nav.agent": "Agent",
+  "nav.chat": "Chat",
+  "nav.explorer": "Explorer",
+  "nav.search": "Search",
+  "nav.sourceControl": "Source Control",
+  "nav.terminal": "Terminal",
+  "nav.extensions": "Extensions",
+  "nav.settings": "Settings",
+  "nav.newProject": "New Project",
+  "nav.openFolder": "Open Folder",
+  "nav.recent": "Recent"
+}

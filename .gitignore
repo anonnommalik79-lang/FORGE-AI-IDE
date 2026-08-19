@@ -1,0 +1,17 @@
+﻿.env
+.env.*
+!.env.example
+node_modules/
+*.log
+*.tmp
+cache/
+Cache/
+Code Cache/
+GPUCache/
+logs/
+_FORGE_BACKUP/
+
+*.exe
+*.dll
+*.pak
+*.bin

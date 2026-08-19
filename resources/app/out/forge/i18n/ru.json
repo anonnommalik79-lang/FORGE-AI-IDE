@@ -1,0 +1,36 @@
+{
+  "brand.name": "FORGE",
+  "brand.positioning": "Платформа для разработки с ИИ",
+
+  "welcome.tagline": "Создавай больше, чем код.",
+  "welcome.subtitle": "Среда разработки, построенная вокруг ИИ. Планируйте, пишите, запускайте, отлаживайте и выпускайте — вместе с автономным агентом.",
+  "welcome.cta.primary": "Начать работу",
+  "welcome.cta.secondary": "Открыть проект",
+  "welcome.cta.newFile": "Новый файл",
+  "welcome.cta.clone": "Клонировать репозиторий",
+  "welcome.engine": "Движок",
+  "welcome.section.start": "Начало",
+  "welcome.section.recent": "Недавние",
+  "welcome.section.walkthroughs": "Руководства",
+
+  "agent.title": "FORGE Агент",
+  "agent.placeholder": "Попросите FORGE создать, исправить, объяснить или собрать...",
+  "agent.placeholder.edit": "Спросите FORGE...  @ — контекст, / — команды",
+
+  "lang.label": "Язык",
+  "lang.en": "English",
+  "lang.ru": "Русский",
+  "lang.switched": "Язык интерфейса: русский",
+
+  "nav.agent": "Агент",
+  "nav.chat": "Чат",
+  "nav.explorer": "Проводник",
+  "nav.search": "Поиск",
+  "nav.sourceControl": "Система контроля версий",
+  "nav.terminal": "Терминал",
+  "nav.extensions": "Расширения",
+  "nav.settings": "Настройки",
+  "nav.newProject": "Новый проект",
+  "nav.openFolder": "Открыть папку",
+  "nav.recent": "Недавние"
+}
