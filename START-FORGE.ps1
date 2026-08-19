@@ -2,6 +2,15 @@ $ErrorActionPreference = 'Stop'
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $Root
 
+# Always restart the installed runtime so a previously running Electron process cannot keep an
+# older, unpatched Agent bundle in memory through the single-instance handoff.
+$runningForge = Get-Process CortexIDE -ErrorAction SilentlyContinue
+if ($runningForge) {
+    Write-Host 'FORGE - closing previous runtime...'
+    $runningForge | Stop-Process -Force -ErrorAction SilentlyContinue
+    Start-Sleep -Milliseconds 500
+}
+
 # The Agent patch intentionally modifies this generated bundle at runtime. Restore only this
 # FORGE-owned generated file before pulling so future updates never conflict with the local patch.
 $workbenchBundle = 'resources/app/out/vs/workbench/workbench.desktop.main.js'
@@ -62,6 +71,8 @@ if (Test-Path $envFile) {
 $gatewayHost = if ($env:FORGE_GATEWAY_HOST) { $env:FORGE_GATEWAY_HOST } else { '127.0.0.1' }
 $gatewayPort = if ($env:FORGE_GATEWAY_PORT) { [int]$env:FORGE_GATEWAY_PORT } else { 43175 }
 $gatewayHealth = "http://${gatewayHost}:$gatewayPort/health"
+$gatewayChat = "http://${gatewayHost}:$gatewayPort/v1/chat/completions"
+$gatewayDiagnostics = "http://${gatewayHost}:$gatewayPort/v1/diagnostics"
 $expectedGatewayVersion = '2.0.0'
 $gatewayReady = $false
 
@@ -110,11 +121,68 @@ if (-not $gatewayReady) {
     }
 }
 
-if ($gatewayReady) {
-    Write-Host "FORGE - MalikLLM75B gateway v$expectedGatewayVersion ready."
-} else {
+if (-not $gatewayReady) {
     throw 'FORGE gateway did not become ready. Check logs\forge-gateway-error.log.'
 }
+
+Write-Host "FORGE - MalikLLM75B gateway v$expectedGatewayVersion ready."
+
+# A health endpoint only proves that the local process is listening. Before the IDE is allowed to
+# open, make a real OpenAI-compatible chat request through exactly the same local endpoint/model
+# the compiled Agent uses. The gateway itself performs provider retry/failover.
+Write-Host 'FORGE - running end-to-end MalikLLM75B self-test...'
+$selfTestBody = @{
+    model = 'MalikLLM75B'
+    messages = @(
+        @{
+            role = 'user'
+            content = 'Reply only: OK'
+        }
+    )
+    max_tokens = 8
+    stream = $false
+} | ConvertTo-Json -Depth 8
+
+$selfTestHeaders = @{
+    Authorization = 'Bearer forge-local-gateway'
+    'Content-Type' = 'application/json'
+}
+
+$selfTestPassed = $false
+$lastSelfTestError = $null
+for ($attempt = 1; $attempt -le 3; $attempt++) {
+    try {
+        $probe = Invoke-RestMethod `
+            -Uri $gatewayChat `
+            -Method Post `
+            -Headers $selfTestHeaders `
+            -Body $selfTestBody `
+            -TimeoutSec 120
+
+        if ($probe.choices -and $probe.choices.Count -gt 0 -and $probe.choices[0].message) {
+            $selfTestPassed = $true
+            break
+        }
+        $lastSelfTestError = 'Gateway returned no chat choice.'
+    } catch {
+        $lastSelfTestError = $_.Exception.Message
+    }
+
+    if ($attempt -lt 3) {
+        Start-Sleep -Seconds 1
+    }
+}
+
+if (-not $selfTestPassed) {
+    Write-Host 'FORGE - end-to-end self-test failed.' -ForegroundColor Red
+    try {
+        $diag = Invoke-RestMethod -Uri $gatewayDiagnostics -Method Get -TimeoutSec 2
+        Write-Host ($diag | ConvertTo-Json -Depth 8)
+    } catch { }
+    throw "MalikLLM75B is not ready for the Agent. Last self-test error: $lastSelfTestError"
+}
+
+Write-Host 'FORGE - MalikLLM75B end-to-end self-test passed.' -ForegroundColor Green
 
 $exe = Join-Path $Root 'CortexIDE.exe'
 if (-not (Test-Path $exe)) {
