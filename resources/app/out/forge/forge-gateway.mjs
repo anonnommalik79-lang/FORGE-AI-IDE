@@ -28,27 +28,90 @@ function parseEnvFile(file) {
   return out;
 }
 
+function boolEnv(value, fallback) {
+  if (value === undefined || value === null || value === '') return fallback;
+  return !['0', 'false', 'no', 'off'].includes(String(value).trim().toLowerCase());
+}
+
+function positiveInt(value, fallback) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? Math.floor(parsed) : fallback;
+}
+
+function normalizeBaseUrl(value) {
+  return String(value || '').trim().replace(/\/+$/, '');
+}
+
+function providerFromEnv(env, id, defaults = {}) {
+  const prefix = id.toUpperCase();
+  return {
+    id,
+    baseUrl: normalizeBaseUrl(env[`${prefix}_BASE_URL`] || defaults.baseUrl || ''),
+    apiKey: String(env[`${prefix}_API_KEY`] || '').trim(),
+    primary: String(env[`${prefix}_MODEL_PRIMARY`] || defaults.primary || '').trim(),
+    fallback: String(env[`${prefix}_MODEL_FALLBACK`] || defaults.fallback || '').trim(),
+    code: String(env[`${prefix}_MODEL_CODE`] || defaults.code || '').trim(),
+    keyOptional: Boolean(defaults.keyOptional)
+  };
+}
+
 function getConfig() {
-  // .env wins over the process snapshot so editing .env takes effect without restarting the gateway.
+  // .env wins over the process snapshot so edits take effect without restarting the gateway.
   const env = { ...process.env, ...parseEnvFile(envPath) };
+  const providerOrder = String(env.FORGE_PROVIDER_ORDER || 'omniroute,mistral,cerebras,groq,gemini')
+    .split(',')
+    .map((value) => value.trim().toLowerCase())
+    .filter(Boolean);
+
+  const providers = {
+    omniroute: providerFromEnv(env, 'omniroute', {
+      baseUrl: 'http://127.0.0.1:20128/v1',
+      primary: 'auto/coding:free',
+      code: 'auto/coding:free',
+      keyOptional: true
+    }),
+    mistral: providerFromEnv(env, 'mistral', {
+      baseUrl: 'https://api.mistral.ai/v1',
+      primary: 'mistral-medium-latest',
+      fallback: 'mistral-large-latest',
+      code: 'devstral-latest'
+    }),
+    cerebras: providerFromEnv(env, 'cerebras', {
+      baseUrl: 'https://api.cerebras.ai/v1',
+      primary: 'gpt-oss-120b',
+      code: 'gpt-oss-120b'
+    }),
+    groq: providerFromEnv(env, 'groq', {
+      baseUrl: 'https://api.groq.com/openai/v1',
+      primary: 'openai/gpt-oss-120b',
+      code: 'openai/gpt-oss-120b'
+    }),
+    gemini: providerFromEnv(env, 'gemini', {
+      baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
+      primary: 'gemini-3.5-flash',
+      code: 'gemini-3.5-flash'
+    })
+  };
+
   return {
     host: env.FORGE_GATEWAY_HOST || '127.0.0.1',
-    port: Number(env.FORGE_GATEWAY_PORT || 43175),
+    port: positiveInt(env.FORGE_GATEWAY_PORT, 43175),
     displayModel: env.FORGE_MODEL_ALIAS || 'MalikLLM75B',
-    baseUrl: (env.MISTRAL_BASE_URL || 'https://api.mistral.ai/v1').replace(/\/+$/, ''),
-    apiKey: env.MISTRAL_API_KEY || '',
-    primary: env.MISTRAL_MODEL_PRIMARY || 'mistral-medium-latest',
-    fallback: env.MISTRAL_MODEL_FALLBACK || 'mistral-large-latest',
-    code: env.MISTRAL_MODEL_CODE || 'devstral-latest',
-    timeoutMs: Number(env.FORGE_REQUEST_TIMEOUT_MS || 120000),
-    maxBodyBytes: Number(env.FORGE_MAX_BODY_BYTES || 12 * 1024 * 1024),
-    policyEnabled: String(env.FORGE_AGENT_POLICY_ENABLED || 'true').toLowerCase() !== 'false'
+    providerOrder,
+    providers,
+    failoverEnabled: boolEnv(env.FORGE_FAILOVER_ENABLED, true),
+    maxRetries: positiveInt(env.FORGE_MAX_RETRIES, 2),
+    cooldownMs: positiveInt(env.FORGE_PROVIDER_COOLDOWN_MS, 60000),
+    timeoutMs: positiveInt(env.FORGE_REQUEST_TIMEOUT_MS, 120000),
+    maxBodyBytes: positiveInt(env.FORGE_MAX_BODY_BYTES, 12 * 1024 * 1024),
+    policyEnabled: boolEnv(env.FORGE_AGENT_POLICY_ENABLED, true)
   };
 }
 
 const initialConfig = getConfig();
 const HOST = initialConfig.host;
 const PORT = initialConfig.port;
+const providerHealth = new Map();
 
 const DEFAULT_POLICY = `You are FORGE Agent, the autonomous coding agent inside FORGE IDE.
 Work as a senior software engineer, not as a passive chat assistant.
@@ -69,7 +132,7 @@ function loadPolicy(cfg) {
   }
 }
 
-const retryableStatuses = new Set([404, 408, 409, 425, 429, 500, 502, 503, 504]);
+const retryableStatuses = new Set([408, 409, 425, 429, 500, 502, 503, 504]);
 
 function cors(res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -108,13 +171,6 @@ function isCodeRequest(body) {
   return /\b(code|bug|fix|refactor|test|build|compile|terminal|file|function|class|typescript|javascript|python|react|node|api|repo|project|код|ошибк|исправ|рефактор|тест|сборк|терминал|файл|проект)\b/i.test(content);
 }
 
-function modelChain(body, cfg) {
-  const preferred = isCodeRequest(body)
-    ? [cfg.code, cfg.primary, cfg.fallback]
-    : [cfg.primary, cfg.fallback, cfg.code];
-  return [...new Set(preferred.filter(Boolean))];
-}
-
 function injectPolicy(messages, cfg) {
   const policy = loadPolicy(cfg);
   if (!policy) return messages;
@@ -139,21 +195,92 @@ function publicModel(cfg) {
   };
 }
 
-async function upstreamChat(body, model, cfg) {
+function providerConfigured(provider) {
+  if (!provider || !provider.baseUrl) return false;
+  if (!provider.primary && !provider.fallback && !provider.code) return false;
+  return provider.keyOptional || Boolean(provider.apiKey);
+}
+
+function providerState(id) {
+  if (!providerHealth.has(id)) {
+    providerHealth.set(id, { failures: 0, cooldownUntil: 0, lastStatus: 0 });
+  }
+  return providerHealth.get(id);
+}
+
+function inCooldown(id) {
+  return providerState(id).cooldownUntil > Date.now();
+}
+
+function markProviderSuccess(id) {
+  const state = providerState(id);
+  state.failures = 0;
+  state.cooldownUntil = 0;
+  state.lastStatus = 200;
+}
+
+function markProviderFailure(id, status, cfg) {
+  const state = providerState(id);
+  state.failures += 1;
+  state.lastStatus = status || 0;
+  if (status === 429 || status >= 500 || status === 0) {
+    state.cooldownUntil = Date.now() + cfg.cooldownMs;
+  }
+}
+
+function modelsForProvider(provider, codeRequest) {
+  const preferred = codeRequest
+    ? [provider.code, provider.primary, provider.fallback]
+    : [provider.primary, provider.fallback, provider.code];
+  return [...new Set(preferred.filter(Boolean))];
+}
+
+function buildRoutes(body, cfg) {
+  const codeRequest = isCodeRequest(body);
+  const routes = [];
+  const seen = new Set();
+
+  for (const id of cfg.providerOrder) {
+    const provider = cfg.providers[id];
+    if (!providerConfigured(provider)) continue;
+    if (inCooldown(id)) continue;
+
+    for (const model of modelsForProvider(provider, codeRequest)) {
+      const key = `${id}:${model}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      routes.push({ provider, model });
+    }
+  }
+
+  if (!cfg.failoverEnabled && routes.length > 1) {
+    return [routes[0]];
+  }
+  return routes;
+}
+
+function authHeaders(provider) {
+  const headers = { 'Content-Type': 'application/json' };
+  if (provider.apiKey) {
+    headers.Authorization = `Bearer ${provider.apiKey}`;
+  }
+  return headers;
+}
+
+async function upstreamChat(body, route, cfg) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(new Error('FORGE upstream timeout')), cfg.timeoutMs);
   try {
     const upstreamBody = {
       ...body,
-      model,
+      model: route.model,
       messages: injectPolicy(body.messages, cfg)
     };
 
-    const response = await fetch(`${cfg.baseUrl}/chat/completions`, {
+    const response = await fetch(`${route.provider.baseUrl}/chat/completions`, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${cfg.apiKey}`,
-        'Content-Type': 'application/json',
+        ...authHeaders(route.provider),
         'Accept': body.stream ? 'text/event-stream' : 'application/json'
       },
       body: JSON.stringify(upstreamBody),
@@ -167,16 +294,17 @@ async function upstreamChat(body, model, cfg) {
   }
 }
 
+async function safeErrorText(response) {
+  try {
+    const text = await response.text();
+    return text.slice(0, 2000);
+  } catch {
+    return '';
+  }
+}
+
 async function handleChat(req, res) {
   const cfg = getConfig();
-  if (!cfg.apiKey) {
-    return sendJson(res, 503, {
-      error: {
-        message: 'FORGE AI is not configured. Add MISTRAL_API_KEY to the local .env file. The gateway reloads .env automatically.',
-        type: 'forge_configuration_error'
-      }
-    });
-  }
 
   let body;
   try {
@@ -188,62 +316,108 @@ async function handleChat(req, res) {
   }
 
   body.model = cfg.displayModel;
-  const chain = modelChain(body, cfg);
-  let lastErrorText = '';
-  let lastStatus = 502;
-
-  for (let i = 0; i < chain.length; i += 1) {
-    const model = chain[i];
-    try {
-      const upstream = await upstreamChat(body, model, cfg);
-      lastStatus = upstream.status;
-
-      if (!upstream.ok && retryableStatuses.has(upstream.status) && i < chain.length - 1) {
-        lastErrorText = await upstream.text();
-        console.warn(`[FORGE gateway] route failed with ${upstream.status}; trying fallback route ${i + 2}/${chain.length}`);
-        continue;
+  const routes = buildRoutes(body, cfg);
+  if (routes.length === 0) {
+    return sendJson(res, 503, {
+      error: {
+        message: 'FORGE AI has no available provider routes. Configure at least one provider in the local .env file or wait for a provider cooldown to expire.',
+        type: 'forge_configuration_error'
       }
+    });
+  }
 
-      cors(res);
-      res.statusCode = upstream.status;
-      const contentType = upstream.headers.get('content-type') || (body.stream ? 'text/event-stream' : 'application/json');
-      res.setHeader('Content-Type', contentType);
-      res.setHeader('Cache-Control', 'no-cache');
-      res.setHeader('X-FORGE-Model', cfg.displayModel);
+  let lastStatus = 502;
+  let attemptCount = 0;
 
-      if (!upstream.body) {
+  for (let routeIndex = 0; routeIndex < routes.length; routeIndex += 1) {
+    const route = routes[routeIndex];
+    const maxAttempts = Math.max(1, cfg.maxRetries + 1);
+
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      attemptCount += 1;
+      try {
+        const upstream = await upstreamChat(body, route, cfg);
+        lastStatus = upstream.status;
+
+        if (!upstream.ok) {
+          const errorText = await safeErrorText(upstream);
+          markProviderFailure(route.provider.id, upstream.status, cfg);
+          console.warn(`[FORGE gateway] ${route.provider.id}/${route.model} failed with ${upstream.status}${errorText ? `: ${errorText}` : ''}`);
+
+          const retrySameRoute = retryableStatuses.has(upstream.status)
+            && upstream.status !== 429
+            && attempt < maxAttempts - 1;
+          if (retrySameRoute) continue;
+
+          const hasNextRoute = routeIndex < routes.length - 1;
+          if (cfg.failoverEnabled && hasNextRoute) break;
+
+          return sendJson(res, upstream.status, {
+            error: {
+              message: 'FORGE AI upstream route failed.',
+              type: 'forge_upstream_error'
+            }
+          });
+        }
+
+        markProviderSuccess(route.provider.id);
+        cors(res);
+        res.statusCode = upstream.status;
+        const contentType = upstream.headers.get('content-type') || (body.stream ? 'text/event-stream' : 'application/json');
+        res.setHeader('Content-Type', contentType);
+        res.setHeader('Cache-Control', 'no-cache');
+        res.setHeader('X-FORGE-Model', cfg.displayModel);
+
+        if (!upstream.body) {
+          res.end();
+          return;
+        }
+
+        const reader = upstream.body.getReader();
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            res.write(Buffer.from(value));
+          }
+        } finally {
+          reader.releaseLock();
+        }
         res.end();
         return;
-      }
+      } catch (error) {
+        lastStatus = 502;
+        markProviderFailure(route.provider.id, 0, cfg);
+        console.warn(`[FORGE gateway] ${route.provider.id}/${route.model} network failure: ${error?.message || String(error)}`);
 
-      const reader = upstream.body.getReader();
-      try {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          res.write(Buffer.from(value));
-        }
-      } finally {
-        reader.releaseLock();
-      }
-      res.end();
-      return;
-    } catch (error) {
-      lastErrorText = error?.message || String(error);
-      lastStatus = 502;
-      if (i < chain.length - 1) {
-        console.warn(`[FORGE gateway] route failed; trying fallback route ${i + 2}/${chain.length}`);
-        continue;
+        if (attempt < maxAttempts - 1) continue;
+        if (cfg.failoverEnabled && routeIndex < routes.length - 1) break;
       }
     }
   }
 
   sendJson(res, lastStatus, {
     error: {
-      message: `FORGE AI request failed after all configured routes. ${lastErrorText}`.trim(),
+      message: `FORGE AI request failed after ${attemptCount} route attempt${attemptCount === 1 ? '' : 's'}.`,
       type: 'forge_upstream_error'
     }
   });
+}
+
+function routeStats(cfg) {
+  let configuredProviders = 0;
+  let availableProviders = 0;
+  let configuredRoutes = 0;
+
+  for (const id of cfg.providerOrder) {
+    const provider = cfg.providers[id];
+    if (!providerConfigured(provider)) continue;
+    configuredProviders += 1;
+    configuredRoutes += modelsForProvider(provider, false).length;
+    if (!inCooldown(id)) availableProviders += 1;
+  }
+
+  return { configuredProviders, availableProviders, configuredRoutes };
 }
 
 const server = http.createServer(async (req, res) => {
@@ -257,12 +431,15 @@ const server = http.createServer(async (req, res) => {
   const cfg = getConfig();
 
   if (req.method === 'GET' && (url.pathname === '/health' || url.pathname === '/v1/health')) {
+    const stats = routeStats(cfg);
     return sendJson(res, 200, {
-      ok: true,
+      ok: stats.availableProviders > 0,
       product: 'FORGE',
       model: cfg.displayModel,
-      configured: Boolean(cfg.apiKey),
-      routes: cfg.apiKey ? [...new Set([cfg.code, cfg.primary, cfg.fallback].filter(Boolean))].length : 0
+      configuredProviders: stats.configuredProviders,
+      availableProviders: stats.availableProviders,
+      routes: stats.configuredRoutes,
+      failover: cfg.failoverEnabled
     });
   }
 
@@ -288,6 +465,7 @@ server.on('error', (error) => {
 
 server.listen(PORT, HOST, () => {
   const cfg = getConfig();
+  const stats = routeStats(cfg);
   console.log(`[FORGE gateway] ready on http://${HOST}:${PORT}/v1 as ${cfg.displayModel}`);
-  console.log(`[FORGE gateway] Mistral key configured: ${cfg.apiKey ? 'yes' : 'no'}`);
+  console.log(`[FORGE gateway] providers configured: ${stats.configuredProviders}; available: ${stats.availableProviders}; routes: ${stats.configuredRoutes}`);
 });
