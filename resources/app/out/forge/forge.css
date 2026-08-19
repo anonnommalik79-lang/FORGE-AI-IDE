@@ -1,240 +1,230 @@
 /*---------------------------------------------------------------------------------------------
- *  FORGE - AI Coding Platform
- *  Product surface styling. Scoped to FORGE-owned elements plus a small number of welcome-page
- *  and agent-panel refinements. Deliberately does not restyle the editor, explorer or terminal.
+ * FORGE - product surface styling
+ * Keeps the editor/workbench layout intact while cleaning the FORGE-owned welcome + agent UI.
  *--------------------------------------------------------------------------------------------*/
 
 .monaco-workbench {
-	--forge-accent: #3d7dff;
-	--forge-accent-soft: rgba(61, 125, 255, 0.14);
-	--forge-accent-line: rgba(61, 125, 255, 0.34);
-	--forge-ink: #f2f4f8;
-	--forge-ink-dim: #9aa2b1;
-	--forge-graphite: #14161a;
-	--forge-hairline: rgba(255, 255, 255, 0.09);
+  --forge-accent: #7c4dff;
+  --forge-accent-2: #9a67ff;
+  --forge-accent-soft: rgba(124, 77, 255, 0.13);
+  --forge-accent-line: rgba(154, 103, 255, 0.36);
+  --forge-ink: #f5f6fa;
+  --forge-ink-dim: #9ca3b2;
+  --forge-hairline: rgba(255, 255, 255, 0.09);
 }
 
-/* ------------------------------------------------------------------ language switcher ----- */
-
+/* Language switcher ------------------------------------------------------------------------- */
 .forge-lang-switch {
-	display: flex;
-	align-items: center;
-	gap: 1px;
-	height: 20px;
-	margin: 0 8px;
-	padding: 2px;
-	border: 1px solid var(--forge-hairline);
-	border-radius: 5px;
-	background: rgba(255, 255, 255, 0.03);
-	-webkit-app-region: no-drag;
-	flex: 0 0 auto;
-	font-size: 10px;
-	line-height: 1;
-	letter-spacing: 0.04em;
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  height: 20px;
+  margin: 0 8px;
+  padding: 2px;
+  border: 1px solid var(--forge-hairline);
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.03);
+  -webkit-app-region: no-drag;
+  flex: 0 0 auto;
+  font-size: 10px;
+  line-height: 1;
+  letter-spacing: 0.04em;
 }
 
 .forge-lang-switch__globe {
-	display: flex;
-	align-items: center;
-	padding: 0 4px 0 3px;
-	color: var(--forge-ink-dim);
-	opacity: 0.75;
-	font-size: 11px;
+  display: flex;
+  align-items: center;
+  padding: 0 4px 0 3px;
+  color: var(--forge-ink-dim);
+  opacity: 0.76;
+  font-size: 11px;
 }
 
 .forge-lang-switch__btn {
-	appearance: none;
-	border: 0;
-	border-radius: 3px;
-	background: transparent;
-	color: var(--forge-ink-dim);
-	font: inherit;
-	font-weight: 600;
-	padding: 3px 7px;
-	cursor: pointer;
-	transition: color 90ms ease, background-color 90ms ease;
+  appearance: none;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--forge-ink-dim);
+  font: inherit;
+  font-weight: 650;
+  padding: 3px 7px;
+  cursor: pointer;
+  transition: color 100ms ease, background-color 100ms ease;
 }
 
 .forge-lang-switch__btn:hover {
-	color: var(--forge-ink);
-	background: rgba(255, 255, 255, 0.06);
+  color: var(--forge-ink);
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .forge-lang-switch__btn.is-active {
-	color: #fff;
-	background: var(--forge-accent-soft);
-	box-shadow: inset 0 0 0 1px var(--forge-accent-line);
+  color: #fff;
+  background: var(--forge-accent-soft);
+  box-shadow: inset 0 0 0 1px var(--forge-accent-line);
 }
 
 .forge-lang-switch__btn:focus-visible {
-	outline: 1px solid var(--forge-accent);
-	outline-offset: 1px;
+  outline: 1px solid var(--forge-accent-2);
+  outline-offset: 1px;
 }
 
-/* ---------------------------------------------------------------------- welcome / hero ----- */
+/* Welcome ----------------------------------------------------------------------------------- */
+/* The stock Getting Started header was the source of the duplicated/overlapping FORGE text.
+   Hide only the stock header; keep Start/Recent and the real workbench layout untouched. */
+.gettingStartedContainer.forge-branded .categories-slide-container .header,
+.gettingStartedContainer.forge-branded .gettingStartedCategoriesContainer .header,
+.gettingStartedContainer.forge-branded .gettingStartedCategoriesContainer > .subtitle,
+.gettingStartedContainer.forge-branded .categories-slide-container > .subtitle {
+  display: none !important;
+}
+
+.gettingStartedContainer.forge-branded .categories-slide-container {
+  flex-wrap: wrap !important;
+  align-content: flex-start !important;
+}
+
+.gettingStartedContainer .categories-slide-container > .forge-hero,
+.gettingStartedContainer .gettingStartedCategoriesContainer > .forge-hero {
+  flex: 0 0 100% !important;
+  width: 100% !important;
+  box-sizing: border-box;
+}
 
 .gettingStartedContainer .forge-hero {
-	padding: 4px 0 34px 0;
-	max-width: 620px;
+  position: relative;
+  z-index: 3;
+  display: block;
+  max-width: 540px;
+  min-width: 0;
+  padding: 8px 0 18px;
+  margin: 0;
+  overflow: visible;
 }
 
 .gettingStartedContainer .forge-hero__mark {
-	display: flex;
-	align-items: center;
-	gap: 10px;
-	margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  margin: 0 0 13px;
 }
 
+/* Use the same FORGE emblem that is also installed into the Windows visual assets. */
 .gettingStartedContainer .forge-hero__glyph {
-	width: 26px;
-	height: 26px;
-	flex: 0 0 auto;
-	border-radius: 6px;
-	background: linear-gradient(155deg, #2b6bff 0%, #1b3f9c 100%);
-	box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08), 0 4px 14px rgba(43, 107, 255, 0.22);
-	position: relative;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
+  border-radius: 9px;
+  background-image: url('../../resources/win32/code_150x150.png');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  box-shadow: 0 0 0 1px rgba(255,255,255,.08), 0 7px 22px rgba(124,77,255,.15);
 }
 
 .gettingStartedContainer .forge-hero__glyph::after {
-	content: "";
-	position: absolute;
-	inset: 8px 7px;
-	border-left: 2px solid rgba(255, 255, 255, 0.92);
-	border-bottom: 2px solid rgba(255, 255, 255, 0.92);
-	border-radius: 0 0 0 2px;
+  display: none !important;
+  content: none !important;
 }
 
 .gettingStartedContainer .forge-hero__wordmark {
-	font-size: 15px;
-	font-weight: 700;
-	letter-spacing: 0.24em;
-	text-transform: uppercase;
-	color: var(--vscode-foreground);
+  flex: 0 0 auto;
+  white-space: nowrap;
+  font-size: 17px;
+  line-height: 1;
+  font-weight: 760;
+  letter-spacing: .17em;
+  text-transform: uppercase;
+  color: var(--vscode-foreground);
 }
 
 .gettingStartedContainer .forge-hero__positioning {
-	font-size: 11px;
-	font-weight: 500;
-	letter-spacing: 0.06em;
-	color: var(--vscode-descriptionForeground);
-	padding-left: 10px;
-	margin-left: 2px;
-	border-left: 1px solid var(--forge-hairline);
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 10.5px;
+  font-weight: 520;
+  letter-spacing: .045em;
+  color: var(--vscode-descriptionForeground);
+  padding-left: 10px;
+  margin-left: 2px;
+  border-left: 1px solid var(--forge-hairline);
 }
 
+/* One clean brand headline; no second giant FORGE word on top of stock content. */
 .gettingStartedContainer .forge-hero__tagline {
-	font-size: 34px;
-	line-height: 1.14;
-	font-weight: 600;
-	letter-spacing: -0.022em;
-	margin: 0 0 14px 0;
-	color: var(--vscode-foreground);
+  max-width: 500px;
+  margin: 0 0 5px;
+  font-size: 22px;
+  line-height: 1.22;
+  font-weight: 580;
+  letter-spacing: -.015em;
+  color: var(--vscode-foreground);
 }
 
 .gettingStartedContainer .forge-hero__subtitle {
-	font-size: 13.5px;
-	line-height: 1.62;
-	font-weight: 400;
-	margin: 0 0 26px 0;
-	max-width: 520px;
-	color: var(--vscode-descriptionForeground);
+  max-width: 500px;
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--vscode-descriptionForeground);
 }
 
+/* Stock Start actions already exist directly below, so do not duplicate them in the hero. */
 .gettingStartedContainer .forge-hero__actions {
-	display: flex;
-	align-items: center;
-	gap: 10px;
-	flex-wrap: wrap;
-}
-
-.gettingStartedContainer .forge-btn {
-	appearance: none;
-	font: inherit;
-	font-size: 12.5px;
-	font-weight: 500;
-	line-height: 1;
-	padding: 9px 16px;
-	border-radius: 6px;
-	cursor: pointer;
-	border: 1px solid transparent;
-	transition: background-color 100ms ease, border-color 100ms ease, color 100ms ease;
-}
-
-.gettingStartedContainer .forge-btn--primary {
-	background: var(--forge-accent);
-	border-color: var(--forge-accent);
-	color: #fff;
-}
-
-.gettingStartedContainer .forge-btn--primary:hover {
-	background: #4f8bff;
-	border-color: #4f8bff;
-}
-
-.gettingStartedContainer .forge-btn--ghost {
-	background: transparent;
-	border-color: var(--vscode-contrastBorder, rgba(255, 255, 255, 0.14));
-	color: var(--vscode-foreground);
-}
-
-.gettingStartedContainer .forge-btn--ghost:hover {
-	background: rgba(255, 255, 255, 0.05);
-	border-color: rgba(255, 255, 255, 0.24);
-}
-
-.gettingStartedContainer .forge-btn:focus-visible {
-	outline: 1px solid var(--forge-accent);
-	outline-offset: 2px;
+  display: none !important;
 }
 
 .gettingStartedContainer .forge-hero__engine {
-	display: inline-flex;
-	align-items: center;
-	gap: 7px;
-	margin-top: 26px;
-	padding: 5px 11px 5px 9px;
-	border: 1px solid var(--forge-hairline);
-	border-radius: 100px;
-	font-size: 11px;
-	color: var(--vscode-descriptionForeground);
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 11px;
+  padding: 4px 9px 4px 8px;
+  border: 1px solid var(--forge-hairline);
+  border-radius: 999px;
+  font-size: 10.5px;
+  color: var(--vscode-descriptionForeground);
+  background: rgba(255,255,255,.018);
 }
 
 .gettingStartedContainer .forge-hero__engine b {
-	font-weight: 600;
-	color: var(--vscode-foreground);
+  font-weight: 650;
+  color: var(--vscode-foreground);
 }
 
 .gettingStartedContainer .forge-hero__dot {
-	width: 5px;
-	height: 5px;
-	border-radius: 50%;
-	background: var(--forge-accent);
-	box-shadow: 0 0 0 3px var(--forge-accent-soft);
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--forge-accent-2);
+  box-shadow: 0 0 0 3px var(--forge-accent-soft);
 }
 
-/* Hide the stock welcome header once the FORGE hero is mounted. */
-.gettingStartedContainer.forge-branded .categories-slide-container > .header {
-	display: none;
-}
-
-/* Calm down stock welcome typography so the hero stays dominant. */
 .gettingStartedContainer .index-list > h2 {
-	font-size: 11px;
-	font-weight: 600;
-	letter-spacing: 0.1em;
-	text-transform: uppercase;
-	opacity: 0.62;
+  font-size: 11px;
+  font-weight: 620;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+  opacity: .66;
 }
 
-/* ------------------------------------------------------------------------- agent panel ----- */
+/* Keep welcome lists readable and prevent the injected brand block from sitting on top of them. */
+.gettingStartedContainer.forge-branded .index-list,
+.gettingStartedContainer.forge-branded .getting-started-list {
+  position: relative;
+  z-index: 1;
+}
 
+/* Agent ------------------------------------------------------------------------------------- */
 .pane-composite-part .composite.title .title-label h2,
 .auxiliarybar .composite.title .title-label h2 {
-	letter-spacing: 0.02em;
+  letter-spacing: .02em;
 }
 
-/* Restrained accent on the agent input focus ring. */
 .void-scope textarea:focus,
-.void-scope input[type="text"]:focus {
-	outline-color: var(--forge-accent);
+.void-scope input[type='text']:focus {
+  outline-color: var(--forge-accent-2);
 }
