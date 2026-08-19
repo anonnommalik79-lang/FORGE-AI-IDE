@@ -1,0 +1,120 @@
+/* FORGE compact welcome/titlebar hotfix. Loaded after forge.css. */
+
+/* Kill the old injected hero completely. The runtime may recreate it periodically; keeping it
+   display:none prevents any flash/overlap before the hotfix observer removes it again. */
+.gettingStartedContainer.forge-welcome-fixed .forge-hero {
+	display: none !important;
+}
+
+/* Hide the original large stock top header only. */
+.gettingStartedContainer.forge-welcome-fixed .forge-stock-welcome-header,
+.gettingStartedContainer.forge-welcome-fixed > .header,
+.gettingStartedContainer.forge-welcome-fixed .gettingStartedCategoriesContainer > .header,
+.gettingStartedContainer.forge-welcome-fixed .categories-slide-container > .header {
+	display: none !important;
+}
+
+/* Compact, full-width product identity above the untouched Start/Recent columns. */
+.gettingStartedContainer.forge-welcome-fixed > .forge-welcome-brandbar {
+	box-sizing: border-box !important;
+	display: flex !important;
+	align-items: center !important;
+	gap: 11px !important;
+	width: min(100%, 760px) !important;
+	min-width: 360px !important;
+	max-width: 760px !important;
+	min-height: 52px !important;
+	margin: 4px 0 22px !important;
+	padding: 7px 10px 7px 7px !important;
+	position: relative !important;
+	z-index: 5 !important;
+	grid-column: 1 / -1 !important;
+	grid-row: auto !important;
+	flex: 0 0 auto !important;
+	overflow: visible !important;
+	white-space: nowrap !important;
+}
+
+.forge-welcome-brandbar__icon {
+	display: block !important;
+	width: 42px !important;
+	height: 42px !important;
+	flex: 0 0 42px !important;
+	object-fit: cover !important;
+	border-radius: 10px !important;
+	box-shadow: 0 0 0 1px rgba(255,255,255,.08), 0 7px 22px rgba(124,77,255,.17) !important;
+}
+
+.forge-welcome-brandbar__copy {
+	display: flex !important;
+	flex-direction: column !important;
+	justify-content: center !important;
+	gap: 4px !important;
+	min-width: 0 !important;
+	flex: 0 0 auto !important;
+}
+
+.forge-welcome-brandbar__name {
+	font-size: 17px !important;
+	line-height: 1 !important;
+	font-weight: 760 !important;
+	letter-spacing: .18em !important;
+	color: var(--vscode-foreground) !important;
+}
+
+.forge-welcome-brandbar__sub {
+	font-size: 9px !important;
+	line-height: 1 !important;
+	font-weight: 650 !important;
+	letter-spacing: .18em !important;
+	color: #9a67ff !important;
+}
+
+.forge-welcome-brandbar__engine {
+	display: inline-flex !important;
+	align-items: center !important;
+	height: 24px !important;
+	margin-left: 7px !important;
+	padding: 0 9px !important;
+	border: 1px solid rgba(255,255,255,.09) !important;
+	border-radius: 999px !important;
+	background: rgba(255,255,255,.025) !important;
+	color: var(--vscode-descriptionForeground) !important;
+	font-size: 10px !important;
+	font-weight: 600 !important;
+	letter-spacing: .02em !important;
+}
+
+/* Prevent welcome category columns from being pushed underneath/over the compact brand bar. */
+.gettingStartedContainer.forge-welcome-fixed .categories-slide-container,
+.gettingStartedContainer.forge-welcome-fixed .gettingStartedCategoriesContainer {
+	position: relative !important;
+	z-index: 1 !important;
+	margin-top: 0 !important;
+}
+
+/* Top-left FORGE emblem beside File/Edit. */
+.forge-titlebar-logo {
+	box-sizing: border-box !important;
+	display: block !important;
+	width: 18px !important;
+	height: 18px !important;
+	flex: 0 0 18px !important;
+	object-fit: cover !important;
+	border-radius: 4px !important;
+	margin: 0 7px 0 6px !important;
+	align-self: center !important;
+	-webkit-app-region: no-drag !important;
+	user-select: none !important;
+}
+
+/* At narrow sizes keep the brand readable without ever collapsing to the two letters "FO". */
+@media (max-width: 760px) {
+	.gettingStartedContainer.forge-welcome-fixed > .forge-welcome-brandbar {
+		min-width: 0 !important;
+		width: 100% !important;
+	}
+	.forge-welcome-brandbar__engine {
+		display: none !important;
+	}
+}
