@@ -36,6 +36,8 @@
 				connect-src
 					'self'
 					https:
+					http://127.0.0.1:43175
+					http://localhost:43175
 					ws:
 				;
 				font-src
@@ -85,4 +87,6 @@
 	<script src="../../../../forge/forge-runtime.js" type="module"></script>
 	<!-- Final compact layout repair for the dynamic Getting Started DOM -->
 	<script src="../../../../forge/forge-welcome-hotfix.js" type="module"></script>
+	<!-- Hide compiled provider implementation details from the FORGE Agent surface -->
+	<script src="../../../../forge/forge-provider-hotfix.js" type="module"></script>
 </html>
