@@ -13,7 +13,7 @@ $envExample = Join-Path $Root '.env.example'
 $envFile = Join-Path $Root '.env'
 if (-not (Test-Path $envFile) -and (Test-Path $envExample)) {
     Copy-Item $envExample $envFile
-    Write-Warning 'Created .env from .env.example. Paste MISTRAL_API_KEY into .env. FORGE gateway reloads it automatically.'
+    Write-Warning 'Created .env from .env.example. Add only the provider keys you want to use. FORGE reloads .env automatically.'
 }
 
 # Load local .env into this process without printing secrets.
@@ -48,9 +48,9 @@ if (-not $gatewayReady) {
         throw 'Node.js is required to run the FORGE MalikLLM75B gateway.'
     }
 
-    $gatewayScript = Join-Path $Root 'resources\app\out\forge\forge-gateway.mjs'
+    $gatewayScript = Join-Path $Root 'resources\app\out\forge\forge-gateway-v2.mjs'
     if (-not (Test-Path $gatewayScript)) {
-        throw "FORGE gateway script was not found at $gatewayScript"
+        throw "FORGE gateway v2 script was not found at $gatewayScript"
     }
 
     $logDir = Join-Path $Root 'logs'
@@ -58,7 +58,7 @@ if (-not $gatewayReady) {
     $stdout = Join-Path $logDir 'forge-gateway.log'
     $stderr = Join-Path $logDir 'forge-gateway-error.log'
 
-    Write-Host 'FORGE - starting MalikLLM 75B gateway...'
+    Write-Host 'FORGE - starting MalikLLM75B gateway v2...'
     Start-Process -FilePath $node.Source `
         -ArgumentList @($gatewayScript) `
         -WorkingDirectory $Root `
@@ -66,7 +66,7 @@ if (-not $gatewayReady) {
         -RedirectStandardOutput $stdout `
         -RedirectStandardError $stderr | Out-Null
 
-    for ($i = 0; $i -lt 20; $i++) {
+    for ($i = 0; $i -lt 30; $i++) {
         Start-Sleep -Milliseconds 150
         try {
             $health = Invoke-RestMethod -Uri $gatewayHealth -Method Get -TimeoutSec 1
@@ -76,7 +76,7 @@ if (-not $gatewayReady) {
 }
 
 if ($gatewayReady) {
-    Write-Host 'FORGE - MalikLLM 75B gateway ready.'
+    Write-Host 'FORGE - MalikLLM75B gateway ready.'
 } else {
     Write-Warning 'FORGE gateway did not become ready. Check logs\forge-gateway-error.log.'
 }
