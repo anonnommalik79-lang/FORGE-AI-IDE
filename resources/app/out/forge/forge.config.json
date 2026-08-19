@@ -1,6 +1,6 @@
 {
-  "_comment": "FORGE AI engine configuration. No secrets are shipped with the product - fill these in locally. FORGE_API_BASE_URL must point at an OpenAI-compatible /v1 endpoint that serves the MalikLLM75B model.",
-  "FORGE_API_BASE_URL": "",
+  "_comment": "FORGE AI engine. The IDE talks only to the local FORGE gateway; real provider/model names stay behind MalikLLM75B.",
+  "FORGE_API_BASE_URL": "http://127.0.0.1:43175/v1",
   "FORGE_API_KEY": "",
   "FORGE_MODEL": "MalikLLM75B",
   "FORGE_HEADERS_JSON": "{}"
