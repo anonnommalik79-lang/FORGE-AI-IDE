@@ -2,11 +2,38 @@ $ErrorActionPreference = 'Stop'
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $Root
 
+# The Agent patch intentionally modifies this generated bundle at runtime. Restore only this
+# FORGE-owned generated file before pulling so future updates never conflict with the local patch.
+$workbenchBundle = 'resources/app/out/vs/workbench/workbench.desktop.main.js'
+try {
+    git checkout -- $workbenchBundle 2>$null
+} catch { }
+
 Write-Host 'FORGE - syncing latest code...'
 try {
     git pull --ff-only
 } catch {
     Write-Warning 'Git pull was skipped or failed. Launching the current local build.'
+}
+
+$node = Get-Command node -ErrorAction SilentlyContinue
+if (-not $node) {
+    throw 'Node.js is required to run FORGE.'
+}
+
+# The compiled Agent stores provider settings in encrypted persistent state. Older installs can
+# therefore override the new FORGE gateway defaults with a stale/empty API key. Patch the exact
+# settings merge site on every launch so the internal compatibility provider is always locked to
+# the local MalikLLM75B gateway. Real upstream secrets never enter the renderer.
+$agentPatcher = Join-Path $Root 'resources\app\out\forge\forge-agent-patch.mjs'
+if (-not (Test-Path $agentPatcher)) {
+    throw "FORGE Agent patcher was not found at $agentPatcher"
+}
+
+Write-Host 'FORGE - locking Agent to MalikLLM75B local gateway...'
+& $node.Source $agentPatcher
+if ($LASTEXITCODE -ne 0) {
+    throw 'FORGE Agent compatibility patch failed. Refusing to launch with stale provider settings.'
 }
 
 $envExample = Join-Path $Root '.env.example'
@@ -53,11 +80,6 @@ try {
 } catch { }
 
 if (-not $gatewayReady) {
-    $node = Get-Command node -ErrorAction SilentlyContinue
-    if (-not $node) {
-        throw 'Node.js is required to run the FORGE MalikLLM75B gateway.'
-    }
-
     $gatewayScript = Join-Path $Root 'resources\app\out\forge\forge-gateway-v2.mjs'
     if (-not (Test-Path $gatewayScript)) {
         throw "FORGE gateway v2 script was not found at $gatewayScript"
@@ -91,7 +113,7 @@ if (-not $gatewayReady) {
 if ($gatewayReady) {
     Write-Host "FORGE - MalikLLM75B gateway v$expectedGatewayVersion ready."
 } else {
-    Write-Warning 'FORGE gateway did not become ready. Check logs\forge-gateway-error.log.'
+    throw 'FORGE gateway did not become ready. Check logs\forge-gateway-error.log.'
 }
 
 $exe = Join-Path $Root 'CortexIDE.exe'
