@@ -1,0 +1,9 @@
+#!/usr/bin/env sh
+# FORGE CLI compatibility launcher.
+# Keeps the installed CortexIDE.exe filename for binary compatibility while exposing the FORGE command.
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+ROOT_DIR="$(dirname "$SCRIPT_DIR")"
+ELECTRON="$ROOT_DIR/CortexIDE.exe"
+CLI="$ROOT_DIR/resources/app/out/cli.js"
+ELECTRON_RUN_AS_NODE=1 "$ELECTRON" "$CLI" "$@"
+exit $?
