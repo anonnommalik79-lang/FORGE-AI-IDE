@@ -68,6 +68,19 @@ if (Test-Path $envFile) {
     }
 }
 
+# OmniRoute is the primary local router for MalikLLM75B. FORGE now owns its startup instead of
+# requiring the user to keep a second PowerShell window open. The bootstrap first starts the
+# already-installed global package directly through Node and, if that runtime is broken, falls
+# back to npx omniroute@latest. Direct providers remain available as failover routes.
+$omniBootstrap = Join-Path $Root 'resources\app\out\forge\forge-omniroute-bootstrap.mjs'
+if (Test-Path $omniBootstrap) {
+    Write-Host 'FORGE - ensuring OmniRoute local router is running...'
+    & $node.Source $omniBootstrap
+    if ($LASTEXITCODE -ne 0) {
+        Write-Warning 'OmniRoute could not be auto-started. FORGE will still test any configured direct provider fallbacks.'
+    }
+}
+
 $gatewayHost = if ($env:FORGE_GATEWAY_HOST) { $env:FORGE_GATEWAY_HOST } else { '127.0.0.1' }
 $gatewayPort = if ($env:FORGE_GATEWAY_PORT) { [int]$env:FORGE_GATEWAY_PORT } else { 43175 }
 $gatewayHealth = "http://${gatewayHost}:$gatewayPort/health"
@@ -76,49 +89,52 @@ $gatewayDiagnostics = "http://${gatewayHost}:$gatewayPort/v1/diagnostics"
 $expectedGatewayVersion = '2.0.0'
 $gatewayReady = $false
 
+# Always restart our own gateway. This clears stale provider cooldowns from a previous failed run
+# and guarantees the current .env values are inherited by the new process.
+$existingForgeGateway = $false
 try {
     $health = Invoke-RestMethod -Uri $gatewayHealth -Method Get -TimeoutSec 1
-    if ($health.ok -and $health.product -eq 'FORGE' -and $health.version -eq $expectedGatewayVersion) {
-        $gatewayReady = $true
-    } elseif ($health.product -eq 'FORGE') {
-        Write-Host 'FORGE - replacing stale gateway process...'
-        $oldPid = (Get-NetTCPConnection -LocalPort $gatewayPort -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1).OwningProcess
-        if ($oldPid) {
-            Stop-Process -Id $oldPid -Force -ErrorAction SilentlyContinue
-            Start-Sleep -Milliseconds 300
-        }
+    if ($health.product -eq 'FORGE') {
+        $existingForgeGateway = $true
     }
 } catch { }
 
-if (-not $gatewayReady) {
-    $gatewayScript = Join-Path $Root 'resources\app\out\forge\forge-gateway-v2.mjs'
-    if (-not (Test-Path $gatewayScript)) {
-        throw "FORGE gateway v2 script was not found at $gatewayScript"
+if ($existingForgeGateway) {
+    Write-Host 'FORGE - refreshing MalikLLM75B gateway state...'
+    $oldPid = (Get-NetTCPConnection -LocalPort $gatewayPort -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1).OwningProcess
+    if ($oldPid) {
+        Stop-Process -Id $oldPid -Force -ErrorAction SilentlyContinue
+        Start-Sleep -Milliseconds 500
     }
+}
 
-    $logDir = Join-Path $Root 'logs'
-    New-Item -ItemType Directory -Force -Path $logDir | Out-Null
-    $stdout = Join-Path $logDir 'forge-gateway.log'
-    $stderr = Join-Path $logDir 'forge-gateway-error.log'
+$gatewayScript = Join-Path $Root 'resources\app\out\forge\forge-gateway-v2.mjs'
+if (-not (Test-Path $gatewayScript)) {
+    throw "FORGE gateway v2 script was not found at $gatewayScript"
+}
 
-    Write-Host 'FORGE - starting MalikLLM75B gateway v2...'
-    Start-Process -FilePath $node.Source `
-        -ArgumentList @($gatewayScript) `
-        -WorkingDirectory $Root `
-        -WindowStyle Hidden `
-        -RedirectStandardOutput $stdout `
-        -RedirectStandardError $stderr | Out-Null
+$logDir = Join-Path $Root 'logs'
+New-Item -ItemType Directory -Force -Path $logDir | Out-Null
+$stdout = Join-Path $logDir 'forge-gateway.log'
+$stderr = Join-Path $logDir 'forge-gateway-error.log'
 
-    for ($i = 0; $i -lt 30; $i++) {
-        Start-Sleep -Milliseconds 150
-        try {
-            $health = Invoke-RestMethod -Uri $gatewayHealth -Method Get -TimeoutSec 1
-            if ($health.ok -and $health.version -eq $expectedGatewayVersion) {
-                $gatewayReady = $true
-                break
-            }
-        } catch { }
-    }
+Write-Host 'FORGE - starting MalikLLM75B gateway v2...'
+Start-Process -FilePath $node.Source `
+    -ArgumentList @($gatewayScript) `
+    -WorkingDirectory $Root `
+    -WindowStyle Hidden `
+    -RedirectStandardOutput $stdout `
+    -RedirectStandardError $stderr | Out-Null
+
+for ($i = 0; $i -lt 40; $i++) {
+    Start-Sleep -Milliseconds 150
+    try {
+        $health = Invoke-RestMethod -Uri $gatewayHealth -Method Get -TimeoutSec 1
+        if ($health.ok -and $health.product -eq 'FORGE' -and $health.version -eq $expectedGatewayVersion) {
+            $gatewayReady = $true
+            break
+        }
+    } catch { }
 }
 
 if (-not $gatewayReady) {
@@ -179,6 +195,7 @@ if (-not $selfTestPassed) {
         $diag = Invoke-RestMethod -Uri $gatewayDiagnostics -Method Get -TimeoutSec 2
         Write-Host ($diag | ConvertTo-Json -Depth 8)
     } catch { }
+    Write-Host 'FORGE - OmniRoute logs: logs\omniroute.log and logs\omniroute-error.log' -ForegroundColor Yellow
     throw "MalikLLM75B is not ready for the Agent. Last self-test error: $lastSelfTestError"
 }
 
