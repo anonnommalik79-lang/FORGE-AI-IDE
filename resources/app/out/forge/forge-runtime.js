@@ -1,36 +1,78 @@
 /*---------------------------------------------------------------------------------------------
  *  FORGE - AI Coding Platform
- *  Product runtime: RU/EN localization for FORGE-owned UI, the language switcher, and the
- *  welcome-screen onboarding.
+ *  Product runtime: FORGE branding, RU/EN localization, language switcher and onboarding.
  *
- *  Design constraints:
- *   - Never touches editor, explorer, terminal, SCM or extension DOM.
- *   - No innerHTML: the workbench runs under `require-trusted-types-for 'script'`.
- *   - Every mount is idempotent and guarded, so a failure degrades to stock behaviour.
+ *  Compatibility rule:
+ *  - User-facing product branding is FORGE.
+ *  - Internal VS Code/Cortex/Void compatibility identifiers are not renamed here because doing
+ *    so can break extensions, persisted settings, protocols, mutexes and the installed binary.
+ *  - Third-party product names are preserved when they genuinely identify an external service.
  *--------------------------------------------------------------------------------------------*/
 
 const STORAGE_KEY = 'forge.language';
 const SUPPORTED = ['en', 'ru'];
 const BASE = new URL('.', import.meta.url);
 
-/** Placeholder strings written into the workbench bundle, mapped to their locale keys. */
 const PLACEHOLDER_KEYS = {
 	'Ask FORGE to build, fix, explain, or ship...': 'agent.placeholder',
 	'Ask FORGE...  @ for context, / for commands': 'agent.placeholder.edit'
 };
 
-/** Welcome-page section headings owned by the FORGE onboarding surface. */
 const WELCOME_HEADINGS = {
 	'Start': 'welcome.section.start',
 	'Recent': 'welcome.section.recent',
 	'Walkthroughs': 'welcome.section.walkthroughs'
 };
 
+/*
+ * Only user-facing product names are rewritten. Do NOT add dependency/package/API names here.
+ * Matching is intentionally conservative so code, terminal output and file contents stay intact.
+ */
+const BRAND_REPLACEMENTS = [
+	[/OpenCortexIDE/g, 'FORGE'],
+	[/Open Cortex IDE/g, 'FORGE'],
+	[/CortexIDE/g, 'FORGE'],
+	[/Cortex IDE/g, 'FORGE'],
+	[/Void Editor/g, 'FORGE'],
+	[/Get started with VS Code/g, 'Get started with FORGE'],
+	[/Welcome to Visual Studio Code/g, 'Welcome to FORGE'],
+	[/Welcome to VS Code/g, 'Welcome to FORGE'],
+	[/Visual Studio Code/g, 'FORGE'],
+	[/VS Code/g, 'FORGE']
+];
+
+const SAFE_BRAND_ROOTS = [
+	'.part.titlebar',
+	'.gettingStartedContainer',
+	'.activitybar',
+	'.sidebar',
+	'.auxiliarybar',
+	'.pane-composite-part',
+	'.statusbar',
+	'.quick-input-widget',
+	'.notifications-toasts',
+	'.monaco-dialog-box',
+	'.context-view',
+	'.menubar'
+];
+
+const SKIP_BRAND_SELECTORS = [
+	'.monaco-editor',
+	'.editor-instance',
+	'.terminal',
+	'.xterm',
+	'.webview',
+	'.webview.ready',
+	'.notebookOverlay',
+	'.notebook-editor',
+	'.output-view',
+	'.debug-console',
+	'.repl'
+].join(',');
+
 const bundles = Object.create(null);
 let current = 'en';
 let mountTimer = null;
-
-/* ------------------------------------------------------------------------------ helpers ---- */
 
 function readStoredLanguage() {
 	try {
@@ -79,7 +121,82 @@ function el(tag, className, text) {
 	return node;
 }
 
-/* -------------------------------------------------------------------- language switcher ---- */
+function replaceBrandText(value) {
+	if (!value || typeof value !== 'string') {
+		return value;
+	}
+	let next = value;
+	for (const [pattern, replacement] of BRAND_REPLACEMENTS) {
+		next = next.replace(pattern, replacement);
+	}
+	return next;
+}
+
+function isBrandSafeElement(node) {
+	if (!node || node.nodeType !== Node.ELEMENT_NODE) {
+		return true;
+	}
+	try {
+		return !node.matches(SKIP_BRAND_SELECTORS) && !node.closest(SKIP_BRAND_SELECTORS);
+	} catch (e) {
+		return true;
+	}
+}
+
+function scrubBrandingIn(root) {
+	if (!root || !isBrandSafeElement(root)) {
+		return;
+	}
+
+	const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+	let textNode;
+	while ((textNode = walker.nextNode())) {
+		const parent = textNode.parentElement;
+		if (!parent || !isBrandSafeElement(parent)) {
+			continue;
+		}
+		const before = textNode.nodeValue;
+		const after = replaceBrandText(before);
+		if (after !== before) {
+			textNode.nodeValue = after;
+		}
+	}
+
+	const nodes = root.querySelectorAll('[aria-label], [title], [placeholder], [alt]');
+	for (const node of nodes) {
+		if (!isBrandSafeElement(node)) {
+			continue;
+		}
+		for (const attr of ['aria-label', 'title', 'placeholder', 'alt']) {
+			if (!node.hasAttribute(attr)) {
+				continue;
+			}
+			const before = node.getAttribute(attr);
+			const after = replaceBrandText(before);
+			if (after !== before) {
+				node.setAttribute(attr, after);
+			}
+		}
+	}
+}
+
+function scrubVisibleProductBranding() {
+	for (const selector of SAFE_BRAND_ROOTS) {
+		const roots = document.querySelectorAll(selector);
+		for (const root of roots) {
+			scrubBrandingIn(root);
+		}
+	}
+
+	const beforeTitle = document.title || '';
+	const brandedTitle = replaceBrandText(beforeTitle);
+	if (brandedTitle !== beforeTitle) {
+		document.title = brandedTitle;
+	}
+	if (!document.title || /^welcome$/i.test(document.title.trim())) {
+		document.title = 'FORGE';
+	}
+}
 
 function mountLanguageSwitcher() {
 	if (document.querySelector('.forge-lang-switch')) {
@@ -114,7 +231,6 @@ function mountLanguageSwitcher() {
 		wrap.appendChild(btn);
 	}
 
-	// Sit to the left of the window controls rather than on top of them.
 	const controls = host.querySelector('.window-controls-container');
 	if (controls) {
 		host.insertBefore(wrap, controls);
@@ -134,10 +250,9 @@ function syncSwitcherState() {
 	const wrap = document.querySelector('.forge-lang-switch');
 	if (wrap) {
 		wrap.title = t('lang.label', 'Language');
+		wrap.setAttribute('aria-label', t('lang.label', 'Language'));
 	}
 }
-
-/* ------------------------------------------------------------------------ welcome screen ---- */
 
 function clickStockEntry(patterns) {
 	const links = document.querySelectorAll('.gettingStartedContainer .button-link, .gettingStartedContainer .index-list li a, .gettingStartedContainer .index-list li button');
@@ -154,8 +269,6 @@ function clickStockEntry(patterns) {
 }
 
 function openAgentPanel() {
-	// The agent lives in the auxiliary (right) bar, not the activity bar, so match on the
-	// rebranded view-container label wherever its toggle happens to be rendered.
 	const item = document.querySelector('a.action-label[aria-label^="FORGE Agent"]')
 		|| document.querySelector('.action-item [aria-label^="FORGE Agent"]')
 		|| document.querySelector('[aria-label^="FORGE Agent"]');
@@ -177,8 +290,7 @@ function buildHero() {
 	mark.appendChild(el('span', 'forge-hero__positioning', t('brand.positioning', 'AI Coding Platform')));
 	hero.appendChild(mark);
 
-	const tagline = el('h1', 'forge-hero__tagline', t('welcome.tagline'));
-	hero.appendChild(tagline);
+	hero.appendChild(el('h1', 'forge-hero__tagline', t('welcome.tagline')));
 	hero.appendChild(el('p', 'forge-hero__subtitle', t('welcome.subtitle')));
 
 	const actions = el('div', 'forge-hero__actions');
@@ -194,16 +306,12 @@ function buildHero() {
 
 	const secondary = el('button', 'forge-btn forge-btn--ghost', t('welcome.cta.secondary'));
 	secondary.type = 'button';
-	secondary.addEventListener('click', () => {
-		clickStockEntry(['open folder', 'открыть папку']);
-	});
+	secondary.addEventListener('click', () => clickStockEntry(['open folder', 'открыть папку']));
 	actions.appendChild(secondary);
 
 	const newFile = el('button', 'forge-btn forge-btn--ghost', t('welcome.cta.newFile'));
 	newFile.type = 'button';
-	newFile.addEventListener('click', () => {
-		clickStockEntry(['new file', 'новый файл']);
-	});
+	newFile.addEventListener('click', () => clickStockEntry(['new file', 'новый файл']));
 	actions.appendChild(newFile);
 
 	hero.appendChild(actions);
@@ -212,10 +320,16 @@ function buildHero() {
 	const dot = el('span', 'forge-hero__dot');
 	dot.setAttribute('aria-hidden', 'true');
 	engine.appendChild(dot);
-	engine.appendChild(el('span', null, t('welcome.engine', 'Engine') + ': '));
+	engine.appendChild(el('span', null, t('welcome.engine', 'Engine') + ': '));
 	engine.appendChild(el('b', null, 'MalikLLM 75B'));
 	hero.appendChild(engine);
 
+	return hero;
+}
+
+function buildHeroTagged() {
+	const hero = buildHero();
+	hero.dataset.forgeLang = current;
 	return hero;
 }
 
@@ -239,12 +353,6 @@ function mountWelcomeHero() {
 	}
 }
 
-function buildHeroTagged() {
-	const hero = buildHero();
-	hero.dataset.forgeLang = current;
-	return hero;
-}
-
 function localizeWelcomeHeadings() {
 	const headings = document.querySelectorAll('.gettingStartedContainer .index-list > h2');
 	for (const h of headings) {
@@ -263,11 +371,12 @@ function localizeWelcomeHeadings() {
 	}
 }
 
-/* ----------------------------------------------------------------------- agent surfaces ---- */
-
 function localizePlaceholders() {
 	const fields = document.querySelectorAll('textarea[placeholder], input[placeholder]');
 	for (const field of fields) {
+		if (!isBrandSafeElement(field)) {
+			continue;
+		}
 		let key = field.dataset.forgePhKey;
 		if (!key) {
 			key = PLACEHOLDER_KEYS[field.getAttribute('placeholder') || ''];
@@ -287,7 +396,7 @@ function localizeAgentTitle() {
 	const labels = document.querySelectorAll('.composite.title .title-label h2, .pane-header .title');
 	for (const label of labels) {
 		const text = (label.textContent || '').trim();
-		if (label.dataset.forgeKey !== 'agent.title' && text !== 'FORGE Agent') {
+		if (label.dataset.forgeKey !== 'agent.title' && text !== 'FORGE Agent' && text !== 'FORGE Агент') {
 			continue;
 		}
 		label.dataset.forgeKey = 'agent.title';
@@ -298,9 +407,8 @@ function localizeAgentTitle() {
 	}
 }
 
-/* ------------------------------------------------------------------------------ lifecycle -- */
-
 function applyAll() {
+	try { scrubVisibleProductBranding(); } catch (e) { /* noop */ }
 	try { mountLanguageSwitcher(); } catch (e) { /* noop */ }
 	try { syncSwitcherState(); } catch (e) { /* noop */ }
 	try { mountWelcomeHero(); } catch (e) { /* noop */ }
@@ -308,6 +416,7 @@ function applyAll() {
 	try { localizePlaceholders(); } catch (e) { /* noop */ }
 	try { localizeAgentTitle(); } catch (e) { /* noop */ }
 	document.documentElement.setAttribute('lang', current);
+	document.documentElement.dataset.forgeProduct = 'FORGE';
 }
 
 async function setLanguage(lang) {
@@ -337,17 +446,18 @@ async function start() {
 	}
 
 	applyAll();
-	// The workbench mounts, re-renders and disposes parts continuously; re-assert on a cheap tick
-	// rather than observing the whole document tree.
-	mountTimer = setInterval(applyAll, 700);
+	mountTimer = setInterval(applyAll, 500);
 
 	globalThis.forge = {
+		product: 'FORGE',
+		engine: 'MalikLLM 75B',
 		get language() { return current; },
 		setLanguage,
 		t,
+		refreshBranding: applyAll,
 		stop() { clearInterval(mountTimer); }
 	};
-	console.log('[FORGE] runtime ready, language =', current);
+	console.log('[FORGE] product runtime ready, language =', current);
 }
 
 start().catch((e) => console.error('[FORGE] runtime failed', e));
