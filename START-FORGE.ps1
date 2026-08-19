@@ -35,11 +35,21 @@ if (Test-Path $envFile) {
 $gatewayHost = if ($env:FORGE_GATEWAY_HOST) { $env:FORGE_GATEWAY_HOST } else { '127.0.0.1' }
 $gatewayPort = if ($env:FORGE_GATEWAY_PORT) { [int]$env:FORGE_GATEWAY_PORT } else { 43175 }
 $gatewayHealth = "http://${gatewayHost}:$gatewayPort/health"
+$expectedGatewayVersion = '2.0.0'
 $gatewayReady = $false
 
 try {
     $health = Invoke-RestMethod -Uri $gatewayHealth -Method Get -TimeoutSec 1
-    $gatewayReady = [bool]$health.ok
+    if ($health.ok -and $health.product -eq 'FORGE' -and $health.version -eq $expectedGatewayVersion) {
+        $gatewayReady = $true
+    } elseif ($health.product -eq 'FORGE') {
+        Write-Host 'FORGE - replacing stale gateway process...'
+        $oldPid = (Get-NetTCPConnection -LocalPort $gatewayPort -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1).OwningProcess
+        if ($oldPid) {
+            Stop-Process -Id $oldPid -Force -ErrorAction SilentlyContinue
+            Start-Sleep -Milliseconds 300
+        }
+    }
 } catch { }
 
 if (-not $gatewayReady) {
@@ -70,13 +80,16 @@ if (-not $gatewayReady) {
         Start-Sleep -Milliseconds 150
         try {
             $health = Invoke-RestMethod -Uri $gatewayHealth -Method Get -TimeoutSec 1
-            if ($health.ok) { $gatewayReady = $true; break }
+            if ($health.ok -and $health.version -eq $expectedGatewayVersion) {
+                $gatewayReady = $true
+                break
+            }
         } catch { }
     }
 }
 
 if ($gatewayReady) {
-    Write-Host 'FORGE - MalikLLM75B gateway ready.'
+    Write-Host "FORGE - MalikLLM75B gateway v$expectedGatewayVersion ready."
 } else {
     Write-Warning 'FORGE gateway did not become ready. Check logs\forge-gateway-error.log.'
 }
