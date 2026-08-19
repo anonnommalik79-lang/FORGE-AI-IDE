@@ -1,7 +1,7 @@
 {
-  "_comment": "FORGE AI engine. The IDE talks only to the local FORGE gateway; real provider/model names stay behind MalikLLM75B.",
+  "_comment": "FORGE AI engine. The IDE talks only to the local FORGE gateway; real provider/model names and credentials stay behind MalikLLM75B.",
   "FORGE_API_BASE_URL": "http://127.0.0.1:43175/v1",
-  "FORGE_API_KEY": "",
+  "FORGE_API_KEY": "forge-local-gateway",
   "FORGE_MODEL": "MalikLLM75B",
   "FORGE_HEADERS_JSON": "{}"
 }
